@@ -9,7 +9,7 @@ protocol StorageServiceProtocol {
 }
 
 class StorageService: StorageServiceProtocol {
-    private let storage = FirebaseManager.shared.storage()
+    private let storage = FirebaseManager.shared.storage
 
     func uploadAudio(data: Data, userId: String, sessionId: String) -> AnyPublisher<URL, Error> {
         return Future<URL, Error> { promise in
@@ -61,5 +61,4 @@ class StorageService: StorageServiceProtocol {
         case downloadURLMissing
     }
 }
-
 

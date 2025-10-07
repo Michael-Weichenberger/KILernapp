@@ -1,92 +1,85 @@
-
 import Foundation
 import Combine
+import FirebaseFirestore
 
 protocol CardServiceProtocol {
     func addCard(front: String, back: String, userId: String) -> AnyPublisher<Card, Error>
     func getCards(userId: String) -> AnyPublisher<[Card], Error>
-    func updateCard(card: Card) -> AnyPublisher<Card, Error>
     func recordReview(card: Card, difficulty: Int) -> AnyPublisher<Card, Error>
 }
 
 class CardService: CardServiceProtocol {
-    private var cards: [Card] = [] // In-memory storage for demonstration
+    private let db = Firestore.firestore()
+    private let collection = "cards"
 
     func addCard(front: String, back: String, userId: String) -> AnyPublisher<Card, Error> {
-        return Future<Card, Error> { promise in
-            let newCard = Card(
-                id: UUID().uuidString,
-                userId: userId,
-                front: front,
-                back: back,
-                easeFactor: 2.5, // Initial ease factor for SM-2
-                repetitions: 0,
-                nextReviewDate: Date(),
-                lastReviewDate: Date()
-            )
-            self.cards.append(newCard)
-            promise(.success(newCard))
-        }.eraseToAnyPublisher()
+        let newCard = Card(
+            id: UUID().uuidString,
+            userId: userId,
+            front: front,
+            back: back,
+            easeFactor: 2.5,
+            repetitions: 0,
+            nextReviewDate: Date(),
+            lastReviewDate: Date()
+        )
+        return saveCard(newCard)
     }
 
     func getCards(userId: String) -> AnyPublisher<[Card], Error> {
-        return Future<[Card], Error> { promise in
-            let userCards = self.cards.filter { $0.userId == userId }
-            promise(.success(userCards))
-        }.eraseToAnyPublisher()
-    }
-
-    func updateCard(card: Card) -> AnyPublisher<Card, Error> {
-        return Future<Card, Error> { promise in
-            if let index = self.cards.firstIndex(where: { $0.id == card.id }) {
-                self.cards[index] = card
-                promise(.success(card))
-            } else {
-                promise(.failure(CardServiceError.cardNotFound))
-            }
+        Future<[Card], Error> { [weak self] promise in
+            guard let self = self else { return }
+            self.db.collection(self.collection)
+                .whereField("userId", isEqualTo: userId)
+                .getDocuments { snapshot, error in
+                    if let error = error {
+                        promise(.failure(error))
+                        return
+                    }
+                    let cards = snapshot?.documents.compactMap { try? $0.data(as: Card.self) } ?? []
+                    promise(.success(cards))
+                }
         }.eraseToAnyPublisher()
     }
 
     func recordReview(card: Card, difficulty: Int) -> AnyPublisher<Card, Error> {
-        return Future<Card, Error> { promise in
-            var updatedCard = card
-            // SM-2 Algorithm implementation
-            // q: quality of the response (0-5)
-            let q = Double(difficulty)
-
-            if q >= 3 {
-                // Correct response
-                if updatedCard.repetitions == 0 {
-                    updatedCard.nextReviewDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())! // 1 day
-                } else if updatedCard.repetitions == 1 {
-                    updatedCard.nextReviewDate = Calendar.current.date(byAdding: .day, value: 6, to: Date())! // 6 days
-                } else {
-                    let interval = Int(round(Double(updatedCard.repetitions) * updatedCard.easeFactor))
-                    updatedCard.nextReviewDate = Calendar.current.date(byAdding: .day, value: interval, to: Date())!
-                }
-                updatedCard.repetitions += 1
-                updatedCard.easeFactor = updatedCard.easeFactor + (0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02))
-                if updatedCard.easeFactor < 1.3 { updatedCard.easeFactor = 1.3 }
-            } else {
-                // Incorrect response
-                updatedCard.repetitions = 0
-                updatedCard.nextReviewDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        var updated = card
+        let q = Double(difficulty)
+        
+        if q >= 3 {
+            updated.repetitions += 1
+            let interval: Int
+            switch updated.repetitions {
+            case 1: interval = 1
+            case 2: interval = 6
+            default: interval = Int(round(Double(updated.repetitions) * updated.easeFactor))
             }
-            updatedCard.lastReviewDate = Date()
+            updated.nextReviewDate = Calendar.current.date(byAdding: .day, value: interval, to: Date())!
+            updated.easeFactor = max(1.3, updated.easeFactor + (0.1 - (5.0 - q) * (0.08 + (5.0 - q) * 0.02)))
+        } else {
+            updated.repetitions = 0
+            updated.nextReviewDate = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        }
+        updated.lastReviewDate = Date()
+        return saveCard(updated)
+    }
 
-            if let index = self.cards.firstIndex(where: { $0.id == updatedCard.id }) {
-                self.cards[index] = updatedCard
-                promise(.success(updatedCard))
-            } else {
-                promise(.failure(CardServiceError.cardNotFound))
+    private func saveCard(_ card: Card) -> AnyPublisher<Card, Error> {
+        Future<Card, Error> { [weak self] promise in
+            guard let self = self else { return }
+            do {
+                try self.db.collection(self.collection)
+                    .document(card.id)
+                    .setData(from: card, merge: true) { error in
+                        if let error = error {
+                            promise(.failure(error))
+                        } else {
+                            promise(.success(card))
+                        }
+                    }
+            } catch {
+                promise(.failure(error))
             }
         }.eraseToAnyPublisher()
     }
-
-    enum CardServiceError: Error {
-        case cardNotFound
-        case unknownError
-    }
 }
-
-

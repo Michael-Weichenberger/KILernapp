@@ -1,89 +1,113 @@
-
 import SwiftUI
 
 struct SummaryView: View {
     @StateObject var viewModel = SummaryViewModel()
-    @State private var inputText: String = "" // For testing purposes
+    @State var inputText: String   // <- neu, Text wird von DocumentScanView übergeben
 
     var body: some View {
-        VStack {
-            Text("Summaries & Q&A")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .padding(.bottom, 40)
-
-            TextField("Enter text to summarize", text: $inputText, axis: .vertical)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .lineLimit(5)
-                .padding(.horizontal)
-                .padding(.bottom, 10)
-
-            Button("Generate Summary & Questions") {
-                viewModel.generateSummariesAndQuestions(text: inputText)
-            }
-            .buttonStyle(PrimaryButtonStyle())
-            .padding(.horizontal)
+        ZStack {
+            LinearGradient(
+                gradient: Gradient(colors: [Color.black, Color.blue.opacity(0.4), Color.purple.opacity(0.4)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 15) {
-                    if !viewModel.shortSummary.isEmpty {
-                        Text("Short Summary:")
-                            .font(.headline)
-                        Text(viewModel.shortSummary)
-                            .padding()
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(10)
-                    }
+                VStack(spacing: 30) {
+                    Text("Summaries & Q&A")
+                        .font(.largeTitle.bold())
+                        .foregroundColor(.white)
+                        .padding(.top, 40)
 
-                    if !viewModel.longSummary.isEmpty {
-                        Text("Long Summary:")
-                            .font(.headline)
-                        Text(viewModel.longSummary)
-                            .padding()
-                            .background(Color.gray.opacity(0.1))
-                            .cornerRadius(10)
+                    // Text Editor mit vorgefülltem OCR Text
+                    VStack(alignment: .leading) {
+                        Text("Text für die KI:")
+                            .foregroundColor(.gray)
+                        TextEditor(text: $inputText)
+                            .frame(minHeight: 120)
+                            .padding(10)
+                            .background(.ultraThinMaterial)
+                            .cornerRadius(12)
+                            .foregroundColor(.white)
                     }
+                    .padding(.horizontal)
 
-                    if !viewModel.generatedQuestions.isEmpty {
-                        Text("Generated Questions:")
-                            .font(.headline)
-                        ForEach(viewModel.generatedQuestions, id: \.self) {
-                            question in
-                            VStack(alignment: .leading) {
-                                Text(question)
-                                    .padding(.bottom, 2)
-                                TextField("Your answer", text: .constant("")) // Placeholder for answer field
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    // Generate Button
+                    Button("Generate Summary & Questions") {
+                        viewModel.generateSummariesAndQuestions(text: inputText)
+                    }
+                    .buttonStyle(PrimaryButtonStyle(color: .purple))
+                    .padding(.horizontal)
+
+                    // Ergebnisse anzeigen
+                    VStack(alignment: .leading, spacing: 20) {
+                        if !viewModel.shortSummary.isEmpty {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Short Summary:")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Text(viewModel.shortSummary)
+                                    .padding()
+                                    .background(.ultraThinMaterial)
+                                    .cornerRadius(10)
+                                    .foregroundColor(.white)
                             }
-                            .padding(.vertical, 5)
                         }
-                        .padding()
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(10)
+
+                        if !viewModel.longSummary.isEmpty {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Long Summary:")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                Text(viewModel.longSummary)
+                                    .padding()
+                                    .background(.ultraThinMaterial)
+                                    .cornerRadius(10)
+                                    .foregroundColor(.white)
+                            }
+                        }
+
+                        if !viewModel.generatedQuestions.isEmpty {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Generated Questions:")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                ForEach(viewModel.generatedQuestions, id: \.self) { question in
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(question)
+                                            .foregroundColor(.white)
+                                        TextField("Your answer", text: .constant(""))
+                                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    }
+                                    .padding()
+                                    .background(.ultraThinMaterial)
+                                    .cornerRadius(10)
+                                }
+                            }
+                        }
                     }
+                    .padding(.horizontal)
+
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .padding(.top, 5)
+                    }
+
+                    Spacer().frame(height: 40)
                 }
-                .padding()
             }
-
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .padding(.top, 5)
-            }
-
-            Spacer()
         }
         .navigationTitle("Summaries")
         .navigationBarTitleDisplayMode(.inline)
     }
 }
-
 struct SummaryView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
-            SummaryView()
+        NavigationStack {
+            SummaryView(inputText: "Dies ist ein Beispieltext für die Vorschau.")
         }
+        .preferredColorScheme(.dark)
     }
 }
-
-

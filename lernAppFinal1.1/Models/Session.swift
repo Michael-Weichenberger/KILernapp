@@ -1,9 +1,9 @@
 
 import Foundation
-import FirebaseFirestoreSwift
+import FirebaseFirestore
 
 struct Session: Identifiable, Codable {
-    @DocumentID var id: String? = UUID().uuidString
+    @DocumentID var id: String?
     let userId: String
     let timestamp: Date
     var audioPath: String?

@@ -1,12 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!--
-   Config.plist
-   lernAppFinal1.1
-
-   Created by Kasi  on 04.09.25.
-   Copyright (c) 2025 ___ORGANIZATIONNAME___. All rights reserved.
--->
 <plist version="1.0">
-<dict/>
+<dict>
+	<key>OPENAI_API_KEY</key>
+	<string>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</string>
+</dict>
 </plist>

@@ -1,8 +1,6 @@
-
 import Foundation
 import Combine
 import FirebaseFirestore
-import FirebaseFirestoreSwift
 
 protocol SessionServiceProtocol {
     func createSession(session: Session) -> AnyPublisher<Session, Error>
@@ -11,59 +9,57 @@ protocol SessionServiceProtocol {
 }
 
 class SessionService: SessionServiceProtocol {
-    private let db = FirebaseManager.shared.firestore()
+    private let db = FirebaseManager.shared.firestore
     private let collection = "sessions"
 
     func createSession(session: Session) -> AnyPublisher<Session, Error> {
-        return Future<Session, Error> { promise in
-            do {
-                _ = try self.db.collection(self.collection).addDocument(from: session) { error in
-                    if let error = error {
-                        promise(.failure(error))
-                    } else {
-                        // Firestore automatically generates an ID, we need to fetch it back
-                        // This is a simplified approach, in a real app you might use a listener or return the document ID
-                        promise(.success(session)) // Assuming session ID is set after creation or not critical for immediate return
-                    }
-                }
-            } catch {
-                promise(.failure(error))
-            }
-        }.eraseToAnyPublisher()
+        let ref = db.collection(collection).document()
+        var sessionWithId = session
+        sessionWithId.id = ref.documentID
+        return saveSession(sessionWithId)
     }
 
     func fetchSessions(userId: String) -> AnyPublisher<[Session], Error> {
-        return Future<[Session], Error> { promise in
-            self.db.collection(self.collection).whereField("userId", isEqualTo: userId).getDocuments { (querySnapshot, error) in
-                if let error = error {
-                    promise(.failure(error))
-                } else {
+        Future<[Session], Error> { [weak self] promise in
+            guard let self = self else { return }
+            self.db.collection(self.collection)
+                .whereField("userId", isEqualTo: userId)
+                .getDocuments { snapshot, error in
+                    if let error = error {
+                        promise(.failure(error))
+                        return
+                    }
                     do {
-                        let sessions = try querySnapshot?.documents.compactMap { document in
-                            try document.data(as: Session.self)
-                        } ?? []
+                        let sessions = try snapshot?.documents.compactMap { try $0.data(as: Session.self) } ?? []
                         promise(.success(sessions))
                     } catch {
                         promise(.failure(error))
                     }
                 }
-            }
         }.eraseToAnyPublisher()
     }
 
     func updateSession(session: Session) -> AnyPublisher<Session, Error> {
-        guard let sessionId = session.id else {
+        guard let id = session.id else {
             return Fail(error: SessionServiceError.invalidSessionId).eraseToAnyPublisher()
         }
-        return Future<Session, Error> { promise in
+        return saveSession(session)
+    }
+
+    // MARK: - Helper: Save Session
+    private func saveSession(_ session: Session) -> AnyPublisher<Session, Error> {
+        Future<Session, Error> { [weak self] promise in
+            guard let self = self else { return }
             do {
-                try self.db.collection(self.collection).document(sessionId).setData(from: session) { error in
-                    if let error = error {
-                        promise(.failure(error))
-                    } else {
-                        promise(.success(session))
+                try self.db.collection(self.collection)
+                    .document(session.id!)
+                    .setData(from: session, merge: true) { error in
+                        if let error = error {
+                            promise(.failure(error))
+                        } else {
+                            promise(.success(session))
+                        }
                     }
-                }
             } catch {
                 promise(.failure(error))
             }
@@ -74,5 +70,3 @@ class SessionService: SessionServiceProtocol {
         case invalidSessionId
     }
 }
-
-

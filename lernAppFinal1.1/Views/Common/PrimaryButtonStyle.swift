@@ -1,17 +1,17 @@
-
 import SwiftUI
+import Combine
 
 struct PrimaryButtonStyle: ButtonStyle {
+    var color: Color = .brown
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.headline)
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
             .padding()
-            .background(Color.blue)
-            .cornerRadius(10)
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .frame(maxWidth: .infinity)
+            .background(configuration.isPressed ? color.opacity(0.7) : color)
+            .foregroundColor(.white)
+            .cornerRadius(12)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
-
-

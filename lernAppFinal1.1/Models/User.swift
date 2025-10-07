@@ -4,7 +4,6 @@ import Foundation
 struct User: Identifiable, Codable {
     let id: String
     let email: String
-    // Add other user-related properties as needed
+    var userName: String?
+    var apiKey: String?
 }
-
-

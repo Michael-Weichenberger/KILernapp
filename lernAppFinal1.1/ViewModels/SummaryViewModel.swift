@@ -1,4 +1,3 @@
-
 import Foundation
 import Combine
 
@@ -11,38 +10,39 @@ class SummaryViewModel: ObservableObject {
     private let aiService: AIServiceProtocol
     private var cancellables = Set<AnyCancellable>()
 
-    init(aiService: AIServiceProtocol = AIService()) {
-        self.aiService = aiService
+    init(apiKey: String? = nil) {
+        // Falls kein API-Key übergeben wird, aus Config.plist holen
+        let key = apiKey ?? Config.value(for: "OPENAI_API_KEY") ?? ""
+        self.aiService = AIService(apiKey: key)
     }
 
     func generateSummariesAndQuestions(text: String) {
+        // Kurze & lange Zusammenfassung
         aiService.summarizeText(text: text)
-            .sink(receiveCompletion: { completion in
+            .sink(receiveCompletion: { [weak self] completion in
                 switch completion {
-                case .finished:
-                    break
+                case .finished: break
                 case .failure(let error):
-                    self.errorMessage = error.localizedDescription
+                    self?.errorMessage = error.localizedDescription
                 }
-            }, receiveValue: { (short, long) in
-                self.shortSummary = short
-                self.longSummary = long
+            }, receiveValue: { [weak self] (short, long) in
+                self?.shortSummary = short
+                self?.longSummary = long
             })
             .store(in: &cancellables)
 
+        // Generierte Fragen
         aiService.generateQuestions(text: text)
-            .sink(receiveCompletion: { completion in
+            .sink(receiveCompletion: { [weak self] completion in
                 switch completion {
-                case .finished:
-                    break
+                case .finished: break
                 case .failure(let error):
-                    self.errorMessage = error.localizedDescription
+                    self?.errorMessage = error.localizedDescription
                 }
-            }, receiveValue: { questions in
-                self.generatedQuestions = questions
+            }, receiveValue: { [weak self] questions in
+                self?.generatedQuestions = questions
             })
             .store(in: &cancellables)
     }
 }
-
 

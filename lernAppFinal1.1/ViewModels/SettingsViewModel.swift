@@ -1,6 +1,6 @@
-
 import Foundation
 import Combine
+import FirebaseFirestore
 
 class SettingsViewModel: ObservableObject {
     @Published var userName: String = ""
@@ -17,26 +17,47 @@ class SettingsViewModel: ObservableObject {
     }
 
     func loadUserSettings() {
-        if let currentUser = authService.currentUser {
-            userName = currentUser.email.components(separatedBy: "@").first ?? "User"
-            userEmail = currentUser.email
+        guard let currentUser = authService.currentUser else { return }
+        userEmail = currentUser.email
+
+        // Firestore User-Daten laden
+        let userDoc = Firestore.firestore().collection("users").document(currentUser.id)
+        userDoc.getDocument { snapshot, error in
+            if let data = snapshot?.data() {
+                self.userName = data["userName"] as? String ?? currentUser.email.components(separatedBy: "@").first ?? "User"
+            } else {
+                self.userName = currentUser.email.components(separatedBy: "@").first ?? "User"
+            }
         }
-        // Load API Key from Keychain (placeholder)
-        openAIApiKey = "sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+        // API Key aus Info.plist holen
+        if let key = Bundle.main.infoDictionary?["OPENAI_API_KEY"] as? String {
+            self.openAIApiKey = key
+        } else {
+            self.openAIApiKey = ""
+            print("⚠️ OPENAI_API_KEY nicht gefunden!")
+        }
     }
 
-    func saveOpenAIApiKey() {
-        // Save API Key to Keychain (placeholder)
-        print("Saving OpenAI API Key: \(openAIApiKey)")
+    func saveSettings() {
+        guard let currentUser = authService.currentUser else { return }
+        let data: [String: Any] = [
+            "userName": userName
+        ]
+        Firestore.firestore().collection("users").document(currentUser.id)
+            .setData(data, merge: true) { error in
+                if let error = error {
+                    self.errorMessage = error.localizedDescription
+                } else {
+                    print("Settings saved for user \(currentUser.id)")
+                }
+            }
     }
 
     func logout() {
         authService.logout()
             .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    break
-                case .failure(let error):
+                if case .failure(let error) = completion {
                     self.errorMessage = error.localizedDescription
                 }
             }, receiveValue: { _ in
@@ -45,5 +66,3 @@ class SettingsViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 }
-
-

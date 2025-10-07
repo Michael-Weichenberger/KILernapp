@@ -1,65 +1,136 @@
-
 import Foundation
 import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 
-class FirebaseManager {
+final class FirebaseManager {
     static let shared = FirebaseManager()
-
+    
     private init() {
-        // FirebaseApp.configure() should be called in your AppDelegate or main App struct
+        // FirebaseApp.configure() muss in AppDelegate oder @main App Struct aufgerufen werden
     }
-
-    // Placeholder for Firebase Auth operations
-    func auth() -> FirebaseAuth.Auth {
-        return FirebaseAuth.Auth.auth()
+    
+    // MARK: - Auth
+    var auth: Auth {
+        return Auth.auth()
     }
-
-    // Placeholder for Firebase Firestore operations
-    func firestore() -> FirebaseFirestore.Firestore {
-        return FirebaseFirestore.Firestore.firestore()
+    
+    var currentUser: User? {
+        guard let firebaseUser = auth.currentUser else { return nil }
+        
+        // Firestore auslesen für username + apiKey
+        let doc = firestore.collection("users").document(firebaseUser.uid)
+        var user = User(
+            id: firebaseUser.uid,
+            email: firebaseUser.email ?? "",
+            userName: "",
+            apiKey: ""
+        )
+        
+        doc.getDocument { snapshot, error in
+            guard let data = snapshot?.data(), error == nil else { return }
+            user.userName = data["userName"] as? String ?? ""
+            user.apiKey = data["apiKey"] as? String ?? ""
+        }
+        
+        return user
     }
-
-    // Placeholder for Firebase Storage operations
-    func storage() -> FirebaseStorage.Storage {
-        return FirebaseStorage.Storage.storage()
-    }
-
-    // Example of how to use Firebase (will be uncommented and fully implemented in Phase 5)
-    /*
-    func registerUser(email: String, password: String, completion: @escaping (Result<User, Error>) -> Void) {
-        Auth.auth().createUser(withEmail: email, password: password) { authResult, error in
+    
+    func signUp(email: String, password: String, completion: @escaping (Result<User, Error>) -> Void) {
+        auth.createUser(withEmail: email, password: password) { result, error in
             if let error = error {
                 completion(.failure(error))
                 return
             }
-            guard let uid = authResult?.user.uid else {
-                completion(.failure(AuthError.unknownError))
+            guard let firebaseUser = result?.user else {
+                completion(.failure(FirebaseManagerError.unknown))
                 return
             }
-            let newUser = User(id: uid, email: email)
-            Firestore.firestore().collection("users").document(uid).setData(newUser.dictionary) { err in
-                if let err = err {
-                    completion(.failure(err))
-                    return
+            
+            // Neues User-Objekt mit Defaults
+            let newUser = User(
+                id: firebaseUser.uid,
+                email: firebaseUser.email ?? "",
+                userName: "",
+                apiKey: ""
+            )
+            
+            // Firestore initial befüllen
+            self.firestore.collection("users").document(newUser.id).setData([
+                "email": newUser.email,
+                "userName": newUser.userName,
+                "apiKey": newUser.apiKey
+            ]) { error in
+                if let error = error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(newUser))
                 }
-                completion(.success(newUser))
             }
         }
     }
-    */
-}
-
-// Extension to convert Codable to Dictionary for Firestore
-/*
-extension Encodable {
-    var dictionary: [String: Any]? {
-        guard let data = try? JSONEncoder().encode(self) else { return nil }
-        return (try? JSONSerialization.jsonObject(with: data, options: .allowFragments)).flatMap { $0 as? [String: Any] }
+    
+    func signIn(email: String, password: String, completion: @escaping (Result<User, Error>) -> Void) {
+        auth.signIn(withEmail: email, password: password) { result, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let firebaseUser = result?.user else {
+                completion(.failure(FirebaseManagerError.unknown))
+                return
+            }
+            
+            // User aus Firestore laden
+            let doc = self.firestore.collection("users").document(firebaseUser.uid)
+            doc.getDocument { snapshot, error in
+                if let data = snapshot?.data(), error == nil {
+                    let user = User(
+                        id: firebaseUser.uid,
+                        email: firebaseUser.email ?? "",
+                        userName: data["userName"] as? String ?? "",
+                        apiKey: data["apiKey"] as? String ?? ""
+                    )
+                    completion(.success(user))
+                } else {
+                    // Fallback
+                    let user = User(
+                        id: firebaseUser.uid,
+                        email: firebaseUser.email ?? "",
+                        userName: "",
+                        apiKey: ""
+                    )
+                    completion(.success(user))
+                }
+            }
+        }
+    }
+    
+    func signOut() throws {
+        try auth.signOut()
+    }
+    
+    // MARK: - Firestore
+    var firestore: Firestore {
+        return Firestore.firestore()
+    }
+    
+    func collection(_ name: String) -> CollectionReference {
+        return firestore.collection(name)
+    }
+    
+    // MARK: - Storage
+    var storage: Storage {
+        return Storage.storage()
+    }
+    
+    func storageReference(path: String) -> StorageReference {
+        return storage.reference(withPath: path)
+    }
+    
+    // MARK: - Custom Errors
+    enum FirebaseManagerError: Error {
+        case unknown
     }
 }
-*/
-
-

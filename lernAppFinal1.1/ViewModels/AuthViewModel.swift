@@ -1,11 +1,13 @@
-
 import Foundation
 import Combine
 
 class AuthViewModel: ObservableObject {
-    @Published var email = ""
-    @Published var password = ""
-    @Published var isAuthenticated = false
+    @Published var email: String = ""
+    @Published var password: String = ""
+    @Published var userName: String = ""
+
+    @Published var currentUser: User? = nil
+    @Published var isAuthenticated: Bool = false
     @Published var errorMessage: String? = nil
 
     private let authService: AuthServiceProtocol
@@ -13,60 +15,55 @@ class AuthViewModel: ObservableObject {
 
     init(authService: AuthServiceProtocol = AuthService()) {
         self.authService = authService
+
+        authService.isAuthenticatedPublisher
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isAuthenticated)
+
+        authService.currentUserPublisher
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$currentUser)
     }
 
     func register() {
-        authService.register(email: email, password: password)
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    break
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                    self.isAuthenticated = false
+        authService.register(email: email, password: password, userName: userName)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                if case .failure(let error) = completion {
+                    self?.errorMessage = error.localizedDescription
                 }
-            }, receiveValue: { user in
-                self.isAuthenticated = true
-                self.errorMessage = nil
-                print("User registered: \(user.email)")
-            })
+            } receiveValue: { [weak self] user in
+                self?.currentUser = user
+                self?.errorMessage = nil
+            }
             .store(in: &cancellables)
     }
 
     func login() {
         authService.login(email: email, password: password)
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    break
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                    self.isAuthenticated = false
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                if case .failure(let error) = completion {
+                    self?.errorMessage = error.localizedDescription
                 }
-            }, receiveValue: { user in
-                self.isAuthenticated = true
-                self.errorMessage = nil
-                print("User logged in: \(user.email)")
-            })
+            } receiveValue: { [weak self] user in
+                self?.currentUser = user
+                self?.errorMessage = nil
+            }
             .store(in: &cancellables)
     }
 
     func logout() {
         authService.logout()
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    break
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] completion in
+                if case .failure(let error) = completion {
+                    self?.errorMessage = error.localizedDescription
                 }
-            }, receiveValue: { _ in
-                self.isAuthenticated = false
-                self.errorMessage = nil
-                print("User logged out")
-            })
+            } receiveValue: { [weak self] in
+                self?.currentUser = nil
+                self?.errorMessage = nil
+            }
             .store(in: &cancellables)
     }
 }
-
-

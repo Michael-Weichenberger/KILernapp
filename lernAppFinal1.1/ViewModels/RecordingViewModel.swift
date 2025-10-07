@@ -1,77 +1,36 @@
-
 import Foundation
 import Combine
 
+// MARK: - Recording ViewModel
 class RecordingViewModel: ObservableObject {
     @Published var isRecording: Bool = false
-    @Published var recordingTime: TimeInterval = 0.0
     @Published var transcription: String = ""
-    @Published var errorMessage: String? = nil
-
+    
+    let cardsViewModel: CardsViewModel
     private let audioService: AudioServiceProtocol
-    private var cancellables = Set<AnyCancellable>()
-    private var timer: Timer? // For simulating recording time
-
-    init(audioService: AudioServiceProtocol = AudioService()) {
+    var cancellables = Set<AnyCancellable>()
+    
+    init(audioService: AudioServiceProtocol = AudioService(), cardsViewModel: CardsViewModel) {
         self.audioService = audioService
+        self.cardsViewModel = cardsViewModel
+        
+        audioService.transcriptionPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] text in
+                guard let self = self else { return }
+                self.transcription += "\n" + text
+                self.cardsViewModel.generateCardsFromText(text)
+            }
+            .store(in: &cancellables)
     }
-
+    
     func startRecording() {
         audioService.startRecording()
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    self.isRecording = true
-                    self.startTimer()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }, receiveValue: { _ in })
-            .store(in: &cancellables)
+        isRecording = true
     }
-
+    
     func stopRecording() {
         audioService.stopRecording()
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    self.isRecording = false
-                    self.stopTimer()
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }, receiveValue: { audioData in
-                self.transcribeAudio(audioData: audioData)
-            })
-            .store(in: &cancellables)
-    }
-
-    private func transcribeAudio(audioData: Data) {
-        audioService.transcribeAudio(audioData: audioData)
-            .sink(receiveCompletion: { completion in
-                switch completion {
-                case .finished:
-                    break
-                case .failure(let error):
-                    self.errorMessage = error.localizedDescription
-                }
-            }, receiveValue: { transcription in
-                self.transcription = transcription
-            })
-            .store(in: &cancellables)
-    }
-
-    private func startTimer() {
-        recordingTime = 0.0
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.recordingTime += 1.0
-        }
-    }
-
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        isRecording = false
     }
 }
-
-
